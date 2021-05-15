@@ -1,0 +1,26 @@
+[workspace]
+
+members = [
+    "crates/macro",
+    "crates/core",
+    "crates/example"
+]
+
+[package]
+name = "ar_pe_ce"
+version = "0.1.0"
+authors = ["Wojciech Polak <wojciech.polak@hitachi-powergrids.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ar_pe_ce_core = { path = "crates/core" }
+ar_pe_ce_macro = { path = "crates/macro" }
+
+# Reexport
+anyhow = "1.0"
+futures = "0.3"
+hyper = { version = "0.14", features = ["full"] }
+url = "2.2"
+tracing = "0.1"
