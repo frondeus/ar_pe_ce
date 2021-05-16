@@ -45,12 +45,13 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
         .map(|(method, attrs)| {
             let name = method.sig.ident.clone();
             let method_uri = format!("/{}", name);
-            if method.sig.inputs.len() > 2 {
-                panic!("All RPC methods have to take maximum one argument");
+            if method.sig.inputs.len() != 2 {
+                panic!("All RPC methods have to take one argument");
             }
             let call = match method.sig.inputs.iter().nth(1) {
                 Some(FnArg::Typed(PatType { pat, .. })) if attrs.contains(CLIENT_STREAMING) => {
                     quote! {{
+                        let body = body.and_then(|it| ready(deserialize(&it)));
                         let #pat = Box::pin(body);
                         self.#name(#pat).await
                     }
@@ -58,29 +59,27 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
                 Some(FnArg::Typed(PatType { pat, ty, .. })) => {
                     quote! {{
-                        let #pat: #ty = body.try_next().await?.context("Expected argument")?;
+                        let mut body = body.and_then(|it| ready(deserialize(&it)));
+                        let #pat: #ty = body
+                            .try_next()
+                            .await
+                            .context("Could not retrieve request body")?
+                            .context("Expected argument")?;
                         self.#name(#pat).await
                     }
                     }
                 }
-                _ => quote! {
-                    self.#name().await
-                },
+                _ => unreachable!()
             };
 
             let method_handler = if attrs.contains(SERVER_STREAMING) {
-                quote! {{
-                    let stream = #call?
-                    .and_then(|res| async move {
-                        rmp_serde::to_vec(&res).map_err(Error::from)
-                    });
-                    Box::pin(stream)
-                }}
+                quote! {
+                    Box::pin(#call.context("Could not handle the request")?.and_then(|res| ready(serialize(&res))))
+                }
             } else {
                 quote! {{
-                    let res = #call
-                        .and_then(|res| rmp_serde::to_vec(&res).map_err(Error::from));
-                    Box::pin(futures::stream::once(async move { res }))
+                    let res = #call.and_then(|res| serialize(&res));
+                    Box::pin(once(ready(res)))
                 }}
             };
             quote! {
@@ -102,25 +101,20 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 }
                 Some(FnArg::Typed(PatType { pat, .. })) => {
-                    quote! {{
-                        let arg_stream = futures::stream::once(futures::future::ready(Ok(#pat)));
-                        self.0.get(#method_name, arg_stream)
-                    }}
+                    quote! {
+                        self.0.get(#method_name, once(ready(Ok(#pat))))
+                    }
                 }
-                _ => quote! {
-                    self.0.get_empty(#method_name)
-                },
+                _ => unreachable!(),
             };
 
             let method_body = if attrs.contains(SERVER_STREAMING) {
                 quote! {
-                    Ok(Box::pin(#call.await?))
+                    Ok(Box::pin(#call.await.context("Could not send request to server")?))
                 }
             } else {
                 quote! {
-                    use ar_pe_ce::{futures::TryStreamExt, anyhow::Context};
-
-                    let item = #call.await?
+                    let item = #call.await.context("Could not send request to server")?
                         .try_next()
                         .await?
                         .context("Expected message")?;
@@ -130,6 +124,7 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             quote! {
                 #sig {
+                    use ar_pe_ce::re::*;
                     #method_body
                 }
             }
@@ -138,25 +133,24 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     item.items.push(parse_quote! {
 
-        #[ar_pe_ce::tracing::instrument(skip(self))]
+        #[ar_pe_ce::re::instrument(skip(self))]
         async fn handle(
             self: std::sync::Arc<Self>,
-            req: ar_pe_ce::hyper::Request<ar_pe_ce::hyper::Body>) ->
-            ar_pe_ce::Result<ar_pe_ce::hyper::Response<ar_pe_ce::hyper::Body>> where Self: Send + Sync {
+            req: ar_pe_ce::re::Request<ar_pe_ce::re::Body>) ->
+            ar_pe_ce::Result<ar_pe_ce::re::Response<ar_pe_ce::re::Body>> where Self: Send + Sync {
 
-                use ar_pe_ce::{Stream, hyper::{Response, Body, StatusCode}, futures::{self, future}, Error, anyhow::Context};
+                use ar_pe_ce::{Stream, Error, re::*, deserialize, serialize};
 
                 let uri = req.uri().clone();
                 let uri = uri.path();
                 let mut body = req.into_body()
-                    .try_filter(|i| future::ready(!i.is_empty()))
-                    .map_err(Error::from)
-                    .and_then(|it| future::ready(rmp_serde::from_read_ref(&it).map_err(Error::from)));
+                    .try_filter(|i| ready(!i.is_empty()))
+                    .map_err(Error::from);
 
-                ar_pe_ce::tracing::info!(?uri, "Handling");
+                tracing::info!(?uri, "Handling");
 
                 let stream: Stream<Vec<u8>> = match uri {
-                    #(#method_variants),*
+                    #(#method_variants,)*
                     _ => {
                         let mut res = Response::new(Body::empty());
                         *res.status_mut() = StatusCode::NOT_FOUND;
@@ -170,15 +164,18 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     item.items.push(parse_quote! {
         async fn serve(self, addr: std::net::SocketAddr) -> ar_pe_ce::Result<()> where Self: Sized + Send + Sync + 'static {
-            use ar_pe_ce::{hyper::{service::{service_fn, make_service_fn}, Server}};
-            let service = std::sync::Arc::new(self);
+            use ar_pe_ce::{Error, re::*};
+            use std::sync::Arc;
+
+            let service = Arc::new(self);
 
             let make_svc = make_service_fn(|_conn| {
                 let service = service.clone();
-                async move { Ok::<_, ar_pe_ce::anyhow::Error>(service_fn(move |req| service.clone().handle(req))) }
+                async move { Ok::<_, Error>(service_fn(move |req| service.clone().handle(req))) }
             });
 
-            Server::bind(&addr).http2_only(true).serve(make_svc).await?;
+            Server::bind(&addr).http2_only(true).serve(make_svc).await
+                .context("Could not serve the RPC service")?;
 
             Ok(())
         }
@@ -192,7 +189,7 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         pub struct #client_name(ar_pe_ce::ClientInner);
         impl #client_name {
-            pub fn new(url: ar_pe_ce::url::Url) -> Self {
+            pub fn new(url: ar_pe_ce::re::Url) -> Self {
                 Self(ar_pe_ce::ClientInner::new(url))
             }
         }
@@ -200,6 +197,11 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[ar_pe_ce::async_trait]
         impl #item_name for #client_name {
             async fn serve(self, _addr: std::net::SocketAddr) -> ar_pe_ce::Result<()> where Self: Sized + Send + Sync + 'static {
+                unimplemented!(concat!("Please implement ", stringify!(#item_name), " manually. This is a client implementation"))
+            }
+
+            async fn handle(self: std::sync::Arc<Self>, req: ar_pe_ce::re::Request<ar_pe_ce::re::Body>) ->
+                ar_pe_ce::Result<ar_pe_ce::re::Response<ar_pe_ce::re::Body>> where Self: Send + Sync {
                 unimplemented!(concat!("Please implement ", stringify!(#item_name), " manually. This is a client implementation"))
             }
 

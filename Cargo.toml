@@ -3,7 +3,7 @@
 members = [
     "crates/macro",
     "crates/core",
-    "crates/example"
+    "crates/examples/*"
 ]
 
 [package]
@@ -17,10 +17,3 @@ edition = "2018"
 [dependencies]
 ar_pe_ce_core = { path = "crates/core" }
 ar_pe_ce_macro = { path = "crates/macro" }
-
-# Reexport
-anyhow = "1.0"
-futures = "0.3"
-hyper = { version = "0.14", features = ["full"] }
-url = "2.2"
-tracing = "0.1"

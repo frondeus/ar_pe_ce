@@ -3,6 +3,7 @@ use futures::{FutureExt, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::IntervalStream;
 
+//Serializes and deserializes to MessagePack
 #[derive(Debug, Deserialize, Serialize)]
 struct Hello {
     hello: String,
@@ -15,12 +16,13 @@ struct World {
 
 #[ar_pe_ce::rpc]
 trait HelloService {
-    #[rpc(server_streaming)]
+    #[rpc(server_streaming)] // Support for server streaming.
     async fn hello(&self, hello: Hello) -> Result<Stream<World>>;
 
-    async fn world(&self) -> Result<World>;
+    // All methods have to be unary, if you need more args, use structure, if you need no arg, use empty tuple.
+    async fn world(&self, arg: ()) -> Result<World>;
 
-    #[rpc(client_streaming)]
+    #[rpc(client_streaming)] // And for client streaming
     async fn foo(&self, hello: Stream<Hello>) -> Result<World>;
 
     #[rpc(client_streaming, server_streaming)]
@@ -29,7 +31,7 @@ trait HelloService {
 
 struct HelloImpl;
 
-#[async_trait::async_trait]
+#[ar_pe_ce::async_trait]
 impl HelloService for HelloImpl {
     #[tracing::instrument(skip(self))]
     async fn hello(&self, hello: Hello) -> Result<Stream<World>> {
@@ -47,12 +49,15 @@ impl HelloService for HelloImpl {
         Ok(Box::pin(stream))
     }
 
-    async fn world(&self) -> Result<World> {
+    #[tracing::instrument(skip(self))]
+    async fn world(&self, _arg: ()) -> Result<World> {
+        tracing::info!(?_arg);
         Ok(World {
             world: "World".into(),
         })
     }
 
+    #[tracing::instrument(skip(self, hello))]
     async fn foo(&self, mut hello: Stream<Hello>) -> Result<World> {
         while let Some(hello) = hello.try_next().await? {
             tracing::info!(?hello);
@@ -62,12 +67,13 @@ impl HelloService for HelloImpl {
         })
     }
 
+    #[tracing::instrument(skip(self, hello))]
     async fn bidi(&self, hello: Stream<Hello>) -> Result<Stream<World>> {
         Ok(Box::pin(hello.map_ok(|h| {
             tracing::info!(?h);
 
             World {
-                world: "Foo".into()
+                world: "Foo".into(),
             }
         })))
     }
@@ -90,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!(?s);
         }
 
-        let world = client.world().await?;
+        let world = client.world(()).await?;
 
         tracing::info!(?world);
 

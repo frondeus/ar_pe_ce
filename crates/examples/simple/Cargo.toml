@@ -1,12 +1,11 @@
 [package]
-name = "ar_pe_ce_example"
+name = "ar_pe_ce_examples_simple"
 version = "0.0.1"
 authors = [ "Wojciech Polak <frondeus@gmail.com>" ]
 edition = "2018"
 
 [dependencies]
-ar_pe_ce = { path = "../../" }
-async-trait = "0.1"
+ar_pe_ce = { path = "../../../" }
 
 tracing = "0.1"
 tracing-subscriber = "0.2"
@@ -15,4 +14,3 @@ tokio-stream = "0.1"
 futures = "0.3.14"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-rmp-serde = "0.15.4"
