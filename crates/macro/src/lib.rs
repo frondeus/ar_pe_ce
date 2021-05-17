@@ -49,42 +49,30 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 panic!("All RPC methods have to take one argument");
             }
             let call = match method.sig.inputs.iter().nth(1) {
-                Some(FnArg::Typed(PatType { pat, .. })) if attrs.contains(CLIENT_STREAMING) => {
+                Some(FnArg::Typed(PatType { .. })) if attrs.contains(CLIENT_STREAMING) => quote! {
+                    self.#name(Box::pin(decode_stream(body))).await
+                },
+                Some(FnArg::Typed(PatType { ty, .. })) => {
                     quote! {{
-                        let body = decode_stream(body);
-                        let #pat = Box::pin(body);
-                        self.#name(#pat).await
-                    }
-                    }
-                }
-                Some(FnArg::Typed(PatType { pat, ty, .. })) => {
-                    quote! {{
-                        let body = decode_stream(body);
-                        let mut body = Box::pin(body);
-                        let #pat: #ty = body
+                        let input: #ty = Box::pin(decode_stream(body))
                             .try_next()
                             .await
                             .context("Could not retrieve request body")?
                             .context("Expected argument")?;
-                        self.#name(#pat).await
-                    }
-                    }
+                        self.#name(input).await
+                    }}
                 }
                 _ => unreachable!(),
             };
 
             let method_handler = if attrs.contains(SERVER_STREAMING) {
-                quote! {{
-                    let res_stream = #call.context("Could not handle the request")?;
-                    let res_stream = encode_stream(res_stream);
-                    Box::pin(res_stream)
-                }}
+                quote! {
+                    Box::pin(encode_stream(#call.context("Could not handle the request")?))
+                }
             } else {
-                quote! {{
-                    let res_stream = once(ready(#call));
-                    let res_stream = encode_stream(res_stream);
-                    Box::pin(res_stream)
-                }}
+                quote! {
+                    Box::pin(encode_stream(once(ready(#call))))
+                }
             };
             quote! {
                 #method_uri => #method_handler
@@ -99,16 +87,12 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let sig = method.sig.clone();
 
             let call = match method.sig.inputs.iter().nth(1) {
-                Some(FnArg::Typed(PatType { pat, .. })) if attrs.contains(CLIENT_STREAMING) => {
-                    quote! {
-                        self.0.get(#method_name, #pat)
-                    }
-                }
-                Some(FnArg::Typed(PatType { pat, .. })) => {
-                    quote! {
-                        self.0.get(#method_name, once(ready(Ok(#pat))))
-                    }
-                }
+                Some(FnArg::Typed(PatType { pat, .. })) if attrs.contains(CLIENT_STREAMING) => quote! {
+                    self.0.get(#method_name, #pat)
+                },
+                Some(FnArg::Typed(PatType { pat, .. })) => quote! {
+                    self.0.get(#method_name, once(ready(Ok(#pat))))
+                },
                 _ => unreachable!(),
             };
 
@@ -118,11 +102,10 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             } else {
                 quote! {
-                    let item = #call.await.context("Could not send request to server")?
+                    Ok(#call.await.context("Could not send request to server")?
                         .try_next()
                         .await?
-                        .context("Expected message")?;
-                    Ok(item)
+                        .context("Expected message")?)
                 }
             };
 
@@ -141,7 +124,7 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
         async fn handle(
             self: std::sync::Arc<Self>,
             req: ar_pe_ce::re::Request<ar_pe_ce::re::Body>) ->
-            ar_pe_ce::Result<ar_pe_ce::re::Response<ar_pe_ce::re::Body>> where Self: Send + Sync {
+            ar_pe_ce::Result<ar_pe_ce::re::Response<ar_pe_ce::re::Body>> where Self: Send + Sync{
 
                 use ar_pe_ce::{Stream, Error, re::*, encode_stream, decode_stream};
 
