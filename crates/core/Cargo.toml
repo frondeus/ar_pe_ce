@@ -8,7 +8,9 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+async-stream = "0.3.1"
 async-trait = "0.1"
+bytes = "1.0.1"
 futures = "0.3"
 hyper = { version = "0.14", features = ["full"] }
 rmp-serde = "0.15.4"

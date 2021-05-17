@@ -7,8 +7,8 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, parse_quote, FnArg, ItemTrait, PatType, TraitItem};
 
-const SERVER_STREAMING: &'static str = "server_streaming";
-const CLIENT_STREAMING: &'static str = "client_streaming";
+const SERVER_STREAMING: &str = "server_streaming";
+const CLIENT_STREAMING: &str = "client_streaming";
 
 #[proc_macro_attribute]
 pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -26,10 +26,10 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     .flat_map(|attr| {
                         attr.tokens
                             .to_string()
-                            .trim_start_matches("(")
-                            .trim_end_matches(")")
+                            .trim_start_matches('(')
+                            .trim_end_matches(')')
                             .to_string()
-                            .split(",")
+                            .split(',')
                             .map(|s| s.trim().to_string())
                             .collect::<Vec<String>>()
                     })
@@ -51,7 +51,7 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let call = match method.sig.inputs.iter().nth(1) {
                 Some(FnArg::Typed(PatType { pat, .. })) if attrs.contains(CLIENT_STREAMING) => {
                     quote! {{
-                        let body = body.and_then(|it| ready(deserialize(&it)));
+                        let body = decode_stream(body);
                         let #pat = Box::pin(body);
                         self.#name(#pat).await
                     }
@@ -59,7 +59,8 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
                 Some(FnArg::Typed(PatType { pat, ty, .. })) => {
                     quote! {{
-                        let mut body = body.and_then(|it| ready(deserialize(&it)));
+                        let body = decode_stream(body);
+                        let mut body = Box::pin(body);
                         let #pat: #ty = body
                             .try_next()
                             .await
@@ -69,17 +70,20 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                     }
                 }
-                _ => unreachable!()
+                _ => unreachable!(),
             };
 
             let method_handler = if attrs.contains(SERVER_STREAMING) {
-                quote! {
-                    Box::pin(#call.context("Could not handle the request")?.and_then(|res| ready(serialize(&res))))
-                }
+                quote! {{
+                    let res_stream = #call.context("Could not handle the request")?;
+                    let res_stream = encode_stream(res_stream);
+                    Box::pin(res_stream)
+                }}
             } else {
                 quote! {{
-                    let res = #call.and_then(|res| serialize(&res));
-                    Box::pin(once(ready(res)))
+                    let res_stream = once(ready(#call));
+                    let res_stream = encode_stream(res_stream);
+                    Box::pin(res_stream)
                 }}
             };
             quote! {
@@ -110,7 +114,7 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             let method_body = if attrs.contains(SERVER_STREAMING) {
                 quote! {
-                    Ok(Box::pin(#call.await.context("Could not send request to server")?))
+                    Ok(#call.await.context("Could not send request to server")?)
                 }
             } else {
                 quote! {
@@ -139,17 +143,15 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
             req: ar_pe_ce::re::Request<ar_pe_ce::re::Body>) ->
             ar_pe_ce::Result<ar_pe_ce::re::Response<ar_pe_ce::re::Body>> where Self: Send + Sync {
 
-                use ar_pe_ce::{Stream, Error, re::*, deserialize, serialize};
+                use ar_pe_ce::{Stream, Error, re::*, encode_stream, decode_stream};
 
                 let uri = req.uri().clone();
                 let uri = uri.path();
-                let mut body = req.into_body()
-                    .try_filter(|i| ready(!i.is_empty()))
-                    .map_err(Error::from);
+                let body = req.into_body();
 
                 tracing::info!(?uri, "Handling");
 
-                let stream: Stream<Vec<u8>> = match uri {
+                let stream: Stream<Bytes> = match uri {
                     #(#method_variants,)*
                     _ => {
                         let mut res = Response::new(Body::empty());

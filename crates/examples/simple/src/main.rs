@@ -109,9 +109,9 @@ async fn main() -> anyhow::Result<()> {
             }),
         ]
         .into_iter();
-        let foo = client.foo(Box::pin(futures::stream::iter(it))).await?;
+        let foo_result = client.foo(Box::pin(futures::stream::iter(it))).await?;
 
-        tracing::info!(?foo);
+        tracing::info!(?foo_result);
 
         let it = vec![
             Ok(Hello {
