@@ -19,6 +19,9 @@ Simple streaming RPC in Rust
 * [ ] Proper error handling
 * [ ] JSON/MessagePack Schema generation
 * [ ] Performance tests
+  * [ ] Mean latency
+  * [ ] Total trhoughput
+  * [ ] Response time
 * [ ] Example in other language like Java
 * [ ] Mockups example
 * [ ] Connection pool
