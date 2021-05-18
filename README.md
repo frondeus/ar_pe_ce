@@ -16,6 +16,7 @@ Simple streaming RPC in Rust
 * [ ] JSON/MessagePack Schema generation
 * [ ] Performance tests
 * [ ] Example in other language like Java
+* [ ] Mockups example
 * [ ] Connection pool
 * [ ] Non-unary inputs
   * [ ] Trailing streaming argument

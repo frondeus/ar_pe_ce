@@ -1,7 +1,15 @@
 [package]
 name = "ar_pe_ce_core"
 version = "0.1.0"
-authors = ["Wojciech Polak <wojciech.polak@hitachi-powergrids.com>"]
+authors = ["Wojciech Polak <frondeus@gmail.com>"]
+license = "MIT"
+description = "HTTP2 based simple streaming RPC - core library"
+homepage = "https://github.com/frondeus/ar_pe_ce"
+repository = "https://github.com/frondeus/ar_pe_ce"
+documentation = "https://docs.rs/ar_pe_ce"
+readme = "README.md"
+keywords = ["rpc", "async", "stream", "http2"]
+categories = ["web-programming::http-server", "web-programming::http-client"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

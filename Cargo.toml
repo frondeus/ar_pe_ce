@@ -3,17 +3,35 @@
 members = [
     "crates/macro",
     "crates/core",
-    "crates/examples/*"
 ]
 
 [package]
 name = "ar_pe_ce"
 version = "0.1.0"
-authors = ["Wojciech Polak <wojciech.polak@hitachi-powergrids.com>"]
+authors = ["Wojciech Polak <frondeus@gmail.com>"]
+license = "MIT"
+description = "HTTP2 based simple streaming RPC"
+homepage = "https://github.com/frondeus/ar_pe_ce"
+repository = "https://github.com/frondeus/ar_pe_ce"
+documentation = "https://docs.rs/ar_pe_ce"
+readme = "README.md"
+keywords = ["rpc", "async", "stream", "http2"]
+categories = ["web-programming::http-server", "web-programming::http-client"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ar_pe_ce_core = { path = "crates/core" }
-ar_pe_ce_macro = { path = "crates/macro" }
+ar_pe_ce_core = "0.1.0"
+ar_pe_ce_macro = "0.1.0"
+
+
+[dev-dependencies]
+tracing = "0.1"
+tracing-subscriber = "0.2"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+futures = "0.3.14"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+async-stream = "0.3.1"
