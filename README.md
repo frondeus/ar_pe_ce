@@ -1,6 +1,10 @@
 # ar_pe_ce
-Simple streaming RPC in Rust
 
+[![Crates.io](https://img.shields.io/crates/v/ar_pe_ce?style=for-the-badge)](https://crates.io/crates/ar_pe_ce)
+[![Crates.io](https://img.shields.io/crates/l/ar_pe_ce?style=for-the-badge)](https://choosealicense.com/licenses/mit/)
+[![docs.rs](https://img.shields.io/docsrs/ar_pe_ce?style=for-the-badge)](https://docs.rs/ar_pe_ce)
+
+Simple streaming RPC in Rust
 
 ## Features:
 
