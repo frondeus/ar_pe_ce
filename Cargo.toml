@@ -25,6 +25,10 @@ edition = "2018"
 ar_pe_ce_core = "0.1.0"
 ar_pe_ce_macro = "0.1.0"
 
+[patch.crates-io]
+ar_pe_ce_core = { path = "crates/core" }
+ar_pe_ce_macro = { path = "crates/macro" }
+
 
 [dev-dependencies]
 tracing = "0.1"
