@@ -1,4 +1,3 @@
-#![feature(drain_filter)]
 extern crate proc_macro;
 
 use std::collections::HashSet;
@@ -22,7 +21,8 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
             TraitItem::Method(method) => {
                 let rpc_attrs: HashSet<_> = method
                     .attrs
-                    .drain_filter(|attr| attr.path == parse_quote! { rpc })
+                    .iter()
+                    .filter(|attr| attr.path == parse_quote! { rpc })
                     .flat_map(|attr| {
                         attr.tokens
                             .to_string()
@@ -34,6 +34,11 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             .collect::<Vec<String>>()
                     })
                     .collect();
+
+                method
+                    .attrs
+                    .retain(|attr| attr.path != parse_quote! { rpc });
+
                 Some((method, rpc_attrs))
             }
             _ => None,
@@ -87,9 +92,11 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let sig = method.sig.clone();
 
             let call = match method.sig.inputs.iter().nth(1) {
-                Some(FnArg::Typed(PatType { pat, .. })) if attrs.contains(CLIENT_STREAMING) => quote! {
-                    self.0.get(#method_name, #pat)
-                },
+                Some(FnArg::Typed(PatType { pat, .. })) if attrs.contains(CLIENT_STREAMING) => {
+                    quote! {
+                        self.0.get(#method_name, #pat)
+                    }
+                }
                 Some(FnArg::Typed(PatType { pat, .. })) => quote! {
                     self.0.get(#method_name, once(ready(Ok(#pat))))
                 },

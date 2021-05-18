@@ -1,11 +1,11 @@
+use crate::Result;
+use crate::{decode_stream, encode_stream};
 use anyhow::{bail, Context};
 use hyper::{client::connect::HttpConnector, Body, Client};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::pin::Pin;
 use url::Url;
-use crate::Result;
-use crate::{encode_stream, decode_stream};
 
 pub struct ClientInner {
     client: Client<HttpConnector, Body>,

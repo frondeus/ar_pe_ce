@@ -4,7 +4,7 @@ use futures::stream::{StreamExt, TryStreamExt};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::{Result, Error};
+use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum DecodeState {
