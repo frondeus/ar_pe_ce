@@ -7,7 +7,7 @@ members = [
 
 [package]
 name = "ar_pe_ce"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Wojciech Polak <frondeus@gmail.com>"]
 license = "MIT"
 description = "HTTP2 based simple streaming RPC"
@@ -23,7 +23,7 @@ edition = "2018"
 
 [dependencies]
 ar_pe_ce_core = "0.1.0"
-ar_pe_ce_macro = "0.1.0"
+ar_pe_ce_macro = "0.1.1"
 
 [patch.crates-io]
 ar_pe_ce_core = { path = "crates/core" }

@@ -1,6 +1,6 @@
 [package]
 name = "ar_pe_ce_macro"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Wojciech Polak <frondeus@gmail.com>"]
 license = "MIT"
 description = "HTTP2 based simple streaming RPC - macros"
