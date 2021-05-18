@@ -16,8 +16,8 @@ pub mod re {
 
 pub type Stream<T> = std::pin::Pin<Box<dyn futures::Stream<Item = Result<T>> + Send + 'static>>;
 
-mod encoding;
 mod client;
+mod encoding;
 mod server {
     use crate::Result;
     use async_trait::async_trait;
@@ -29,6 +29,6 @@ mod server {
     }
 }
 
-pub use encoding::*;
 pub use client::*;
+pub use encoding::*;
 pub use server::*;

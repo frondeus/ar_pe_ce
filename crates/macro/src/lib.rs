@@ -87,9 +87,11 @@ pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let sig = method.sig.clone();
 
             let call = match method.sig.inputs.iter().nth(1) {
-                Some(FnArg::Typed(PatType { pat, .. })) if attrs.contains(CLIENT_STREAMING) => quote! {
-                    self.0.get(#method_name, #pat)
-                },
+                Some(FnArg::Typed(PatType { pat, .. })) if attrs.contains(CLIENT_STREAMING) => {
+                    quote! {
+                        self.0.get(#method_name, #pat)
+                    }
+                }
                 Some(FnArg::Typed(PatType { pat, .. })) => quote! {
                     self.0.get(#method_name, once(ready(Ok(#pat))))
                 },
