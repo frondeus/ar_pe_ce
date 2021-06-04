@@ -3,13 +3,13 @@ name = "ar_pe_ce_macro"
 version = "0.1.1"
 authors = ["Wojciech Polak <frondeus@gmail.com>"]
 license = "MIT"
-description = "HTTP2 based simple streaming RPC - macros"
+description = "TCP based simple streaming RPC - macros"
 homepage = "https://github.com/frondeus/ar_pe_ce"
 repository = "https://github.com/frondeus/ar_pe_ce"
 documentation = "https://docs.rs/ar_pe_ce"
 readme = "README.md"
-keywords = ["rpc", "async", "stream", "http2"]
-categories = ["web-programming::http-server", "web-programming::http-client"]
+keywords = ["rpc", "async", "stream", "tcp"]
+categories = []
 edition = "2018"
 
 [lib]
@@ -17,6 +17,7 @@ proc-macro = true
 
 [dependencies]
 itertools = "0.10.0"
+proc-macro-crate = "1.0.0"
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = {version = "1.0", features = ["full", "extra-traits"] }

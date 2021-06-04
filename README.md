@@ -14,11 +14,12 @@ Simple streaming RPC in Rust
 * [x] Server streaming
 * [x] No protobuf files bullshit
 * [x] Serde based serialization/deserialization
-* [x] Message pack
-* [ ] Less code in macro
+* [ ] Message pack - diabled for debugging & development. Can be easily enabled
+* [x] Less code in macro
 * [ ] Open telemetry support
 * [ ] Better macro span support
-* [ ] Proper error handling
+* [x] Proper error handling
+  * [ ] Better network handling
 * [ ] JSON/MessagePack Schema generation
 * [ ] Performance tests
   * [ ] Mean latency
@@ -27,5 +28,5 @@ Simple streaming RPC in Rust
 * [ ] Example in other language like Java
 * [ ] Mockups example
 * [ ] Connection pool
-* [ ] Non-unary inputs
-  * [ ] Trailing streaming argument
+* [x] Non-unary inputs
+  * [x] Trailing streaming argument

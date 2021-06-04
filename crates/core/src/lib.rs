@@ -1,34 +1,31 @@
-pub use anyhow::{Error, Result};
 pub use async_trait::async_trait;
 
 #[doc(hidden)]
 pub mod re {
-    pub use anyhow::Context;
-    pub use bytes::Bytes;
-    pub use futures::{future::ready, stream::once, TryStreamExt};
-    pub use hyper::{
-        service::{make_service_fn, service_fn},
-        Body, Request, Response, Server, StatusCode,
+    pub use crate::*;
+
+    pub use anyhow::{self, Context};
+    pub use bytes::{Bytes, BytesMut};
+    pub use futures::{
+        future::ready, pin_mut, stream::empty, stream::once, SinkExt, StreamExt, TryStreamExt,
     };
+    pub use serde::{Deserialize, Serialize};
+    pub use tokio::net::TcpStream;
+    pub use tokio_util::codec::{FramedRead, FramedWrite};
     pub use tracing::instrument;
-    pub use url::Url;
 }
 
-pub type Stream<T> = std::pin::Pin<Box<dyn futures::Stream<Item = Result<T>> + Send + 'static>>;
+pub type Stream<T, E = Infallible> =
+    std::pin::Pin<Box<dyn futures::Stream<Item = Result<T, E>> + Send + 'static>>;
 
 mod client;
 mod encoding;
-mod server {
-    use crate::Result;
-    use async_trait::async_trait;
-
-    //TODO:
-    #[async_trait]
-    pub trait Rpc<T, O> {
-        async fn call(&self, req: T) -> Result<O>;
-    }
-}
+mod error;
+mod network;
+mod server;
 
 pub use client::*;
 pub use encoding::*;
+pub use error::*;
+pub use network::*;
 pub use server::*;
