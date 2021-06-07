@@ -10,13 +10,13 @@ name = "ar_pe_ce"
 version = "0.1.1"
 authors = ["Wojciech Polak <frondeus@gmail.com>"]
 license = "MIT"
-description = "HTTP2 based simple streaming RPC"
+description = "TCP based simple streaming RPC"
 homepage = "https://github.com/frondeus/ar_pe_ce"
 repository = "https://github.com/frondeus/ar_pe_ce"
 documentation = "https://docs.rs/ar_pe_ce"
 readme = "README.md"
-keywords = ["rpc", "async", "stream", "http2"]
-categories = ["web-programming::http-server", "web-programming::http-client"]
+keywords = ["rpc", "async", "stream", "tcp"]
+categories = []
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -39,3 +39,4 @@ futures = "0.3.14"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 async-stream = "0.3.1"
+once_cell = "1.7.2"

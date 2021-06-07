@@ -1,117 +1,161 @@
+use std::marker::PhantomData;
+
 use anyhow::Context;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use futures::stream::{StreamExt, TryStreamExt};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use bytes::{Buf, BufMut, BytesMut};
+use serde::{de::DeserializeOwned, Serialize};
+use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{Error, Result};
+use anyhow::{Error, Result};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum DecodeState {
-    ReadHeader,
-    ReadBody { len: usize },
+pub type DefaultCodec<T> = Json<T>;
+
+// pub type DefaultCodec<T> = MsgPack<T>;
+
+pub struct Json<T> {
+    _phantom: PhantomData<T>,
 }
 
-fn decode_chunk<T>(buf: &mut BytesMut, state: &mut DecodeState) -> Result<Option<T>>
+impl<T> Default for Json<T> {
+    fn default() -> Self {
+        Self {
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<T> Decoder for Json<T>
 where
-    T: DeserializeOwned + Send,
+    T: DeserializeOwned,
 {
-    if *state == DecodeState::ReadHeader {
-        if buf.remaining() < 4 {
+    type Item = T;
+    type Error = Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
+        if src.len() < 4 {
             return Ok(None);
         }
 
-        let len = buf.get_u32() as usize;
-        buf.reserve(len);
-        *state = DecodeState::ReadBody { len };
-    }
+        let mut length_bytes = [0u8; 4];
+        length_bytes.copy_from_slice(&src[..4]);
+        let length = u32::from_le_bytes(length_bytes) as usize;
 
-    if let DecodeState::ReadBody { len } = *state {
-        if buf.remaining() < len || buf.len() < len {
+        if length > u32::MAX as usize {
+            anyhow::bail!("Frame length {} is too large", length);
+        }
+
+        if src.len() < 4 + length {
+            src.reserve(4 + length - src.len());
+
             return Ok(None);
         }
 
-        let to_decode = buf.split_to(len).freeze();
-
-        let msg = rmp_serde::from_read_ref(&to_decode).context("Could not deserialize message")?;
-
-        *state = DecodeState::ReadHeader;
-        return Ok(Some(msg));
+        let data = src[4..4 + length].to_vec();
+        src.advance(4 + length);
+        tracing::warn!("Decoding: {}", std::str::from_utf8(&data).unwrap());
+        let msg = serde_json::from_slice(&data).context("Could not deserialize message")?;
+        Ok(Some(msg))
     }
-
-    Ok(None)
 }
 
-pub fn decode_stream<T>(
-    stream: impl futures::Stream<Item = Result<Bytes, hyper::Error>> + Send + 'static,
-) -> impl futures::Stream<Item = Result<T>> + Send
+use std::fmt::Debug;
+
+impl<T> Encoder<T> for Json<T>
 where
-    T: DeserializeOwned + Send,
+    T: Serialize + Debug,
 {
-    let mut buf = BytesMut::with_capacity(8 * 1024);
-    let mut state = DecodeState::ReadHeader;
+    type Error = Error;
 
-    async_stream::stream! {
-        futures::pin_mut!(stream);
-
-        loop {
-            match decode_chunk(&mut buf, &mut state) {
-                Err(e) => {
-                    yield Err(e);
-                    continue;
-                },
-                Ok(Some(t)) => {
-                    yield Ok(t);
-                    continue;
-                }
-                Ok(None) => ()
-            }
-
-            match stream.next().await {
-                Some(Ok(bytes)) => {
-
-                    buf.put(bytes);
-
-
-
-                },
-                Some(Err(e)) => yield Err(Error::from(e)),
-                None => break,
-            }
+    fn encode(&mut self, item: T, dst: &mut BytesMut) -> Result<()> {
+        let mut buf = BytesMut::with_capacity(8 * 1024).writer();
+        tracing::warn!(?item, "Encoding");
+        if let Err(e) =
+            serde_json::to_writer(&mut buf, &item).context("Could not serialize message")
+        {
+            anyhow::bail!("Could not encode: {}", e);
         }
+
+        let buf_len = buf.get_ref().len();
+
+        if buf_len > u32::MAX as usize {
+            anyhow::bail!("Frame of length {} is too large", buf_len);
+        }
+
+        let len_slice = u32::to_le_bytes(buf_len as u32);
+
+        dst.reserve(4 + buf_len);
+
+        dst.extend_from_slice(&len_slice);
+        dst.extend_from_slice(buf.get_ref());
+        Ok(())
     }
 }
 
-pub fn encode_stream<T>(
-    stream: impl futures::Stream<Item = Result<T>> + Send + 'static,
-) -> impl futures::Stream<Item = Result<Bytes>> + Send + 'static
-where
-    T: Serialize,
-{
-    let mut buf = BytesMut::with_capacity(8 * 1024).writer();
-    stream.and_then(move |msg| {
-        futures::future::ready({
-            buf.get_mut().reserve(4);
-            unsafe {
-                buf.get_mut().advance_mut(4);
-            }
+// struct MsgPack<T> {
+//     _phantom: PhantomData<T>,
+// }
 
-            if let Err(e) =
-                rmp_serde::encode::write(&mut buf, &msg).context("Could not serialize message")
-            {
-                return futures::future::ready(Result::Err(e));
-            }
+// impl<T> MsgPack<T> {
+//     pub fn new() -> Self {
+//         Self {
+//             _phantom: Default::default(),
+//         }
+//     }
+// }
 
-            let len = buf.get_ref().len() - 4;
-            assert!(len <= std::u32::MAX as usize);
-            {
-                let buf = buf.get_mut();
-                let mut buf = &mut buf[..4];
-                buf.put_u32(len as u32);
-            }
+// impl<T: DeserializeOwned> Decoder for MsgPack<T> {
+//     type Item = T;
+//     type Error = Error;
 
-            let encoded = buf.get_mut().split_to(len + 4).freeze();
-            Ok(encoded)
-        })
-    })
-}
+//     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
+//         if src.len() < 4 {
+//             return Ok(None);
+//         }
+
+//         let mut length_bytes = [0u8; 4];
+//         length_bytes.copy_from_slice(&src[..4]);
+//         let length = u32::from_le_bytes(length_bytes) as usize;
+
+//         if length > u32::MAX as usize {
+//             anyhow::bail!("Frame length {} is too large", length);
+//         }
+
+//         if src.len() < 4 + length {
+//             src.reserve(4 + length - src.len());
+
+//             return Ok(None);
+//         }
+
+//         let data = src[4..4 + length].to_vec();
+//         src.advance(4 + length);
+
+//         let msg = rmp_serde::from_read_ref(&data).context("Could not deserialize message")?;
+//         Ok(Some(msg))
+//     }
+// }
+
+// impl<T: Serialize> Encoder<T> for MsgPack<T> {
+//     type Error = Error;
+
+//     fn encode(&mut self, item: T, dst: &mut BytesMut) -> Result<()> {
+//         let mut buf = BytesMut::with_capacity(8 * 1024).writer();
+//         if let Err(e) =
+//             rmp_serde::encode::write(&mut buf, &item).context("Could not serialize message")
+//         {
+//             anyhow::bail!("Could not encode: {}", e)
+//         }
+
+//         let buf_len = buf.get_ref().len();
+
+//         if buf_len > u32::MAX as usize {
+//             anyhow::bail!("Frame of length {} is too large", buf_len);
+//         }
+
+//         let len_slice = u32::to_le_bytes(buf_len as u32);
+
+//         dst.reserve(4 + buf_len);
+
+//         dst.extend_from_slice(&len_slice);
+//         dst.extend_from_slice(buf.get_ref());
+//         Ok(())
+//     }
+// }
